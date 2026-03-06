@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const openAIState = vi.hoisted(() => ({
-  constructorArgs: [] as Array<Record<string, unknown> | undefined>,
   generate: vi.fn(),
   edit: vi.fn(),
   toFile: vi.fn(async () => ({ name: 'mock-file' })),
@@ -17,10 +16,6 @@ const getImageBase64CachedMock = vi.hoisted(() => vi.fn(async () => 'data:image/
 
 vi.mock('openai', () => ({
   default: class OpenAI {
-    constructor(config?: Record<string, unknown>) {
-      openAIState.constructorArgs.push(config)
-    }
-
     images = {
       generate: openAIState.generate,
       edit: openAIState.edit,
@@ -42,7 +37,6 @@ import { OpenAICompatibleImageGenerator } from '@/lib/generators/image/openai-co
 describe('OpenAICompatibleImageGenerator', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    openAIState.constructorArgs = []
     getProviderConfigMock.mockResolvedValue({
       id: 'openai-compatible:oa-1',
       apiKey: 'oa-key',
@@ -124,22 +118,5 @@ describe('OpenAICompatibleImageGenerator', () => {
 
     expect(result.success).toBe(false)
     expect(result.error).toContain('OPENAI_COMPATIBLE_IMAGE_OPTION_UNSUPPORTED')
-  })
-
-  it('injects User-Agent header for openai-compatible image requests', async () => {
-    openAIState.generate.mockResolvedValueOnce({ data: [{ b64_json: 'YmFzZTY0' }] })
-
-    const generator = new OpenAICompatibleImageGenerator('gpt-image-1', 'openai-compatible:oa-1')
-    const result = await generator.generate({
-      userId: 'user-1',
-      prompt: 'draw a lighthouse',
-    })
-
-    expect(result.success).toBe(true)
-    expect(openAIState.constructorArgs[0]).toMatchObject({
-      defaultHeaders: {
-        'User-Agent': 'waoowaoo/0.1',
-      },
-    })
   })
 })

@@ -21,7 +21,6 @@ const llmMock = vi.hoisted(() => ({
 const helperMock = vi.hoisted(() => ({
   resolveProjectModel: vi.fn(async () => ({
     id: 'project-1',
-    userId: 'user-1',
     novelPromotionData: {
       id: 'np-project-1',
       analysisModel: 'llm::analysis-1',
