@@ -5,7 +5,29 @@ import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core
 
 import { submitFalTask } from '@/lib/async-submit'
 import { getProviderConfig, getProviderKey, resolveModelSelectionOrSingle } from '@/lib/api-config'
-import { imageUrlToBase64 } from '@/lib/cos'
+import { normalizeToOriginalMediaUrl } from '@/lib/media/outbound-image'
+
+function assertFalFetchableUrl(field: 'video_url' | 'audio_url', value: string): void {
+  if (value.startsWith('data:')) {
+    throw new Error(`${field} 不能使用 data URL，请改用可访问的 HTTP(S) 文件地址`)
+  }
+
+  let parsed: URL
+  try {
+    parsed = new URL(value)
+  } catch {
+    throw new Error(`${field} 必须是完整的 HTTP(S) URL，当前值无效`)
+  }
+
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error(`${field} 必须使用 HTTP(S) 协议，当前协议: ${parsed.protocol}`)
+  }
+
+  const blockedHosts = new Set(['localhost', '127.0.0.1', '0.0.0.0', '::1'])
+  if (blockedHosts.has(parsed.hostname.toLowerCase())) {
+    throw new Error(`${field} 指向本机地址(${parsed.hostname})，FAL 无法从公网访问该文件`)
+  }
+}
 
 /**
  * 口型同步结果
@@ -55,17 +77,15 @@ export async function generateLipSync(
         throw new Error(`LIPSYNC_ENDPOINT_MISSING: ${selection.modelKey}`)
       }
 
-      const videoDataUrl = params.videoUrl.startsWith('data:')
-        ? params.videoUrl
-        : await imageUrlToBase64(params.videoUrl)
-      const audioDataUrl = params.audioUrl.startsWith('data:')
-        ? params.audioUrl
-        : await imageUrlToBase64(params.audioUrl)
-      _ulogInfo('[LipSync Async] FAL 入参已转换为 Data URL')
+      const videoInputUrl = await normalizeToOriginalMediaUrl(params.videoUrl)
+      const audioInputUrl = await normalizeToOriginalMediaUrl(params.audioUrl)
+      assertFalFetchableUrl('video_url', videoInputUrl)
+      assertFalFetchableUrl('audio_url', audioInputUrl)
+      _ulogInfo('[LipSync Async] FAL 入参已归一化为可访问 URL')
 
       const input = {
-        video_url: videoDataUrl,
-        audio_url: audioDataUrl,
+        video_url: videoInputUrl,
+        audio_url: audioInputUrl,
       }
 
       const { apiKey } = await getProviderConfig(userId, selection.provider)
